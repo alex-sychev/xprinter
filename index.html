@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Xprinter PDF Сдвиг</title>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      margin: 0; padding: 20px 16px;
+      background: #111315; color: #f2f4f7;
+      display: flex; justify-content: center;
+    }
+    .card {
+      width: 100%; max-width: 440px;
+      background: #1b1e22; border-radius: 16px;
+      padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; }
+    .sub { font-size: 13px; color: #98a2b3; margin: 0 0 20px; }
+    .file-btn {
+      display: block; width: 100%; padding: 16px;
+      background: #2563eb; color: #fff; text-align: center;
+      border-radius: 12px; font-size: 16px; font-weight: 600;
+      cursor: pointer; border: none; margin-bottom: 18px;
+    }
+    .file-btn:active { background: #1d4ed8; }
+    input[type="file"] { display: none; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    label.field { display: block; font-size: 12px; color: #98a2b3; margin-bottom: 6px; }
+    input[type="number"] {
+      width: 100%; padding: 12px; border-radius: 10px;
+      border: 1px solid #2e333a; background: #121417;
+      color: #fff; font-size: 16px; font-weight: 500;
+    }
+    .check-row {
+      display: flex; align-items: center; gap: 10px;
+      background: #121417; padding: 12px; border-radius: 10px;
+      border: 1px solid #2e333a; margin-bottom: 18px; font-size: 14px;
+    }
+    input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; }
+    .action-btn {
+      display: none; width: 100%; padding: 16px;
+      background: #16a34a; color: #fff; border: none;
+      border-radius: 12px; font-size: 16px; font-weight: 600;
+      cursor: pointer; margin-bottom: 10px;
+    }
+    .action-btn:active { background: #15803d; }
+    .alt-link {
+      display: none; text-align: center; color: #60a5fa;
+      font-size: 14px; text-decoration: none; padding: 8px;
+    }
+    .status {
+      font-size: 13px; color: #98a2b3; text-align: center;
+      min-height: 20px; margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Сдвиг PDF для Xprinter</h1>
+    <p class="sub">Векторная коррекция отступа слева без потери качества</p>
+
+    <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
+    <input type="file" id="pdfInput" accept="application/pdf">
+
+    <div class="grid">
+      <div>
+        <label class="field" for="shiftMm">Сдвиг вправо (мм)</label>
+        <input type="number" id="shiftMm" step="0.5" value="3">
+      </div>
+      <div>
+        <label class="field" for="scalePct">Масштаб (%)</label>
+        <input type="number" id="scalePct" step="1" value="93">
+      </div>
+    </div>
+
+    <label class="check-row">
+      <input type="checkbox" id="skipFirst" checked>
+      <span>Не сдвигать 1-ю страницу (оставить как есть)</span>
+    </label>
+
+    <button class="action-btn" id="shareBtn">Отправить в Xprinter</button>
+    <a class="alt-link" id="openLink" target="_blank">Открыть PDF в новой вкладке</a>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    const pdfInput = document.getElementById('pdfInput');
+    const shiftInput = document.getElementById('shiftMm');
+    const scaleInput = document.getElementById('scalePct');
+    const skipFirstInput = document.getElementById('skipFirst');
+    const shareBtn = document.getElementById('shareBtn');
+    const openLink = document.getElementById('openLink');
+    const statusEl = document.getElementById('status');
+
+    let currentFile = null;
+    let outputBlob = null;
+    let outputFileName = 'label_fixed.pdf';
+
+    // Восстановление сохранённых настроек
+    if (localStorage.getItem('xp_shift')) shiftInput.value = localStorage.getItem('xp_shift');
+    if (localStorage.getItem('xp_scale')) scaleInput.value = localStorage.getItem('xp_scale');
+    if (localStorage.getItem('xp_skip1') !== null) {
+      skipFirstInput.checked = localStorage.getItem('xp_skip1') === 'true';
+    }
+
+    function saveSettings() {
+      localStorage.setItem('xp_shift', shiftInput.value);
+      localStorage.setItem('xp_scale', scaleInput.value);
+      localStorage.setItem('xp_skip1', skipFirstInput.checked);
+    }
+
+    async function processPDF() {
+      if (!currentFile) return;
+      saveSettings();
+
+      if (typeof PDFLib === 'undefined') {
+        statusEl.textContent = 'Ошибка: нет интернета для загрузки модуля PDF.';
+        return;
+      }
+
+      statusEl.textContent = 'Обработка страниц...';
+      try {
+        const arrayBuffer = await currentFile.arrayBuffer();
+        const { PDFDocument } = PDFLib;
+        const srcDoc = await PDFDocument.load(arrayBuffer);
+        const outDoc = await PDFDocument.create();
+
+        const pageCount = srcDoc.getPageCount();
+        const shiftMm = parseFloat(shiftInput.value) || 0;
+        const scale = (parseFloat(scaleInput.value) || 100) / 100;
+        const skipFirst = skipFirstInput.checked;
+        const mmToPt = 2.83465;
+
+        for (let i = 0; i < pageCount; i++) {
+          if (i === 0 && skipFirst) {
+            const [copiedPage] = await outDoc.copyPages(srcDoc, [0]);
+            outDoc.addPage(copiedPage);
+          } else {
+            const srcPage = srcDoc.getPage(i);
+            const { width, height } = srcPage.getSize();
+            const embeddedPage = await outDoc.embedPage(srcPage);
+            const newPage = outDoc.addPage([width, height]);
+
+            const scaledW = width * scale;
+            const scaledH = height * scale;
+            const xOffset = shiftMm * mmToPt;
+            const yOffset = (height - scaledH) / 2;
+
+            newPage.drawPage(embeddedPage, {
+              x: xOffset,
+              y: yOffset,
+              width: scaledW,
+              height: scaledH
+            });
+          }
+        }
+
+        const pdfBytes = await outDoc.save();
+        outputBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+        outputFileName = 'fixed_' + currentFile.name;
+
+        const blobUrl = URL.createObjectURL(outputBlob);
+        openLink.href = blobUrl;
+        openLink.style.display = 'block';
+        shareBtn.style.display = 'block';
+
+        const shiftedCount = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
+        statusEl.textContent = `Готово: страниц ${pageCount} (сдвинуто: ${shiftedCount})`;
+      } catch (err) {
+        statusEl.textContent = 'Ошибка чтения PDF: ' + err.message;
+      }
+    }
+
+    pdfInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        currentFile = e.target.files[0];
+        processPDF();
+      }
+    });
+
+    [shiftInput, scaleInput, skipFirstInput].forEach(el => {
+      el.addEventListener('change', processPDF);
+    });
+
+    shareBtn.addEventListener('click', async () => {
+      if (!outputBlob) return;
+      const file = new File([outputBlob], outputFileName, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch (err) {
+          // Пользователь закрыл меню «Поделиться»
+        }
+      } else {
+        window.open(openLink.href, '_blank');
+      }
+    });
+  </script>
+</body>
+</html>
