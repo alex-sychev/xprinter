@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Xprinter PDF Сдвиг</title>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body {
-      margin: 0; padding: 20px 16px;
+      margin: 0; padding: 24px 16px;
       background: #111315; color: #f2f4f7;
       display: flex; justify-content: center;
     }
@@ -99,7 +101,6 @@
     let outputBlob = null;
     let outputFileName = 'label_fixed.pdf';
 
-    // Восстановление сохранённых настроек
     if (localStorage.getItem('xp_shift')) shiftInput.value = localStorage.getItem('xp_shift');
     if (localStorage.getItem('xp_scale')) scaleInput.value = localStorage.getItem('xp_scale');
     if (localStorage.getItem('xp_skip1') !== null) {
@@ -174,6 +175,24 @@
       }
     }
 
+    function loadFromHash() {
+      const hash = window.location.hash;
+      if (!hash || !hash.startsWith('#pdf=')) return;
+      try {
+        const raw = hash.slice(5).replace(/\s+/g, '');
+        const binary = atob(raw);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        currentFile = new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
+        history.replaceState(null, '', window.location.pathname);
+        processPDF();
+      } catch (e) {
+        statusEl.textContent = 'Не удалось прочитать PDF из ссылки: ' + e.message;
+      }
+    }
+
     pdfInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files[0]) {
         currentFile = e.target.files[0];
@@ -191,13 +210,13 @@
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file] });
-        } catch (err) {
-          // Пользователь закрыл меню «Поделиться»
-        }
+        } catch (err) {}
       } else {
         window.open(openLink.href, '_blank');
       }
     });
+
+    window.addEventListener('DOMContentLoaded', loadFromHash);
   </script>
 </body>
 </html>
