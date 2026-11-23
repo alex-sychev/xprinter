@@ -43,19 +43,20 @@
     }
     input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; }
     .action-btn {
-      display: none; width: 100%; padding: 16px;
-      background: #16a34a; color: #fff; border: none;
+      display: block; width: 100%; padding: 16px;
+      background: #2e333a; color: #98a2b3; border: none;
       border-radius: 12px; font-size: 16px; font-weight: 600;
       cursor: pointer; margin-bottom: 10px;
     }
-    .action-btn:active { background: #15803d; }
+    .action-btn.ready { background: #16a34a; color: #fff; }
+    .action-btn.ready:active { background: #15803d; }
     .alt-link {
       display: none; text-align: center; color: #60a5fa;
       font-size: 14px; text-decoration: none; padding: 8px;
     }
     .status {
       font-size: 13px; color: #98a2b3; text-align: center;
-      min-height: 20px; margin-top: 8px;
+      min-height: 20px; margin-top: 8px; line-height: 1.4;
     }
   </style>
 </head>
@@ -85,7 +86,7 @@
 
     <button class="action-btn" id="shareBtn">Отправить в Xprinter</button>
     <a class="alt-link" id="openLink" target="_blank">Открыть PDF в новой вкладке</a>
-    <div class="status" id="status"></div>
+    <div class="status" id="status">Ожидание PDF-файла...</div>
   </div>
 
   <script>
@@ -102,16 +103,20 @@
     let currentBlobUrl = null;
     let outputFileName = 'label_fixed.pdf';
 
-    if (localStorage.getItem('xp_shift')) shiftInput.value = localStorage.getItem('xp_shift');
-    if (localStorage.getItem('xp_scale')) scaleInput.value = localStorage.getItem('xp_scale');
-    if (localStorage.getItem('xp_skip1') !== null) {
-      skipFirstInput.checked = localStorage.getItem('xp_skip1') === 'true';
-    }
+    try {
+      if (localStorage.getItem('xp_shift')) shiftInput.value = localStorage.getItem('xp_shift');
+      if (localStorage.getItem('xp_scale')) scaleInput.value = localStorage.getItem('xp_scale');
+      if (localStorage.getItem('xp_skip1') !== null) {
+        skipFirstInput.checked = localStorage.getItem('xp_skip1') === 'true';
+      }
+    } catch (e) {}
 
     function saveSettings() {
-      localStorage.setItem('xp_shift', shiftInput.value);
-      localStorage.setItem('xp_scale', scaleInput.value);
-      localStorage.setItem('xp_skip1', skipFirstInput.checked);
+      try {
+        localStorage.setItem('xp_shift', shiftInput.value);
+        localStorage.setItem('xp_scale', scaleInput.value);
+        localStorage.setItem('xp_skip1', skipFirstInput.checked);
+      } catch (e) {}
     }
 
     async function processPDF() {
@@ -169,7 +174,7 @@
 
         openLink.href = currentBlobUrl;
         openLink.style.display = 'block';
-        shareBtn.style.display = 'block';
+        shareBtn.classList.add('ready');
 
         const shiftedCount = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
         statusEl.textContent = `Готово: страниц ${pageCount} (сдвинуто: ${shiftedCount})`;
@@ -180,7 +185,16 @@
 
     function loadFromHash() {
       const hash = window.location.hash;
-      if (!hash || !hash.startsWith('#pdf=')) return;
+      const fromShortcut = window.location.search.includes('sc=1');
+
+      if (!hash || !hash.startsWith('#pdf=')) {
+        if (fromShortcut) {
+          statusEl.textContent = 'iOS обрезала слишком большой PDF при передаче по ссылке — выберите файл синей кнопкой выше.';
+          history.replaceState(null, '', window.location.pathname);
+        }
+        return;
+      }
+
       try {
         let raw = decodeURIComponent(hash.slice(5)).replace(/\s+/g, '');
         raw = raw.replace(/-/g, '+').replace(/_/g, '/');
@@ -193,5 +207,41 @@
           bytes[i] = binary.charCodeAt(i);
         }
         currentFile = new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
-        history.replaceState(null, '', window.location.pathname + window.location.search);
+        history.replaceState(null, '', window.location.pathname);
         processPDF();
+      } catch (e) {
+        statusEl.textContent = 'Ошибка чтения PDF из ссылки (файл обрезан iOS): ' + e.message;
+      }
+    }
+
+    pdfInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        currentFile = e.target.files[0];
+        processPDF();
+      }
+    });
+
+    [shiftInput, scaleInput, skipFirstInput].forEach(el => {
+      el.addEventListener('change', processPDF);
+    });
+
+    shareBtn.addEventListener('click', async () => {
+      if (!outputBlob) {
+        statusEl.textContent = 'Сначала выберите PDF-файл синей кнопкой выше.';
+        return;
+      }
+      const file = new File([outputBlob], outputFileName, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch (err) {}
+      } else {
+        window.open(openLink.href, '_blank');
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', loadFromHash);
+    window.addEventListener('hashchange', loadFromHash);
+  </script>
+</body>
+</html>
