@@ -6,6 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Xprinter PDF Сдвиг</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';document.head.appendChild(s);"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     body { margin: 0; padding: 20px 16px; background: #111315; color: #f2f4f7; display: flex; justify-content: center; }
@@ -29,6 +30,16 @@
     input[type="number"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #2e333a; background: #121417; color: #fff; font-size: 16px; }
     .check-row { display: flex; align-items: center; gap: 10px; background: #121417; padding: 12px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 16px; font-size: 14px; }
     input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; }
+
+    .preview-box { display: none; background: #121417; border: 1px solid #2e333a; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+    .preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; color: #98a2b3; }
+    .page-nav { display: flex; align-items: center; gap: 8px; }
+    .nav-btn { background: #2e333a; color: #fff; border: none; border-radius: 6px; padding: 4px 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .nav-btn:disabled { opacity: 0.35; }
+    .canvas-wrap { display: flex; justify-content: center; align-items: center; background: #0b0d0f; padding: 12px; border-radius: 8px; }
+    #previewCanvas { max-width: 100%; height: auto; background: #fff; border: 1.5px dashed #ef4444; border-radius: 3px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    .preview-hint { font-size: 11px; color: #667085; text-align: center; margin-top: 8px; }
+
     .action-btn { display: block; width: 100%; padding: 16px; background: #2e333a; color: #98a2b3; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 10px; cursor: pointer; }
     .action-btn.ready { background: #16a34a; color: #fff; }
     .action-btn.ready:active { background: #15803d; }
@@ -72,12 +83,31 @@
       <span>Не трогать 1-ю страницу (оставить как есть)</span>
     </label>
 
+    <div class="preview-box" id="previewBox">
+      <div class="preview-head">
+        <span>Предпросмотр этикетки</span>
+        <div class="page-nav">
+          <button type="button" class="nav-btn" id="prevPageBtn">◀</button>
+          <span id="pageIndicator">1 / 1</span>
+          <button type="button" class="nav-btn" id="nextPageBtn">▶</button>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="previewCanvas"></canvas>
+      </div>
+      <div class="preview-hint">Красная пунктирная рамка — физический край наклейки</div>
+    </div>
+
     <button class="action-btn" id="shareBtn">Отправить в Xprinter</button>
     <a class="alt-link" id="openLink" target="_blank">Открыть PDF в новой вкладке</a>
     <div class="status" id="status">Ожидание PDF-файла...</div>
   </div>
 
   <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
     const pdfInput = document.getElementById('pdfInput');
     const modeCenterBtn = document.getElementById('modeCenterBtn');
     const modeShiftBtn = document.getElementById('modeShiftBtn');
@@ -85,6 +115,11 @@
     const shiftInput = document.getElementById('shiftMm');
     const scaleInput = document.getElementById('scalePct');
     const skipFirstInput = document.getElementById('skipFirst');
+    const previewBox = document.getElementById('previewBox');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const pageIndicator = document.getElementById('pageIndicator');
     const shareBtn = document.getElementById('shareBtn');
     const openLink = document.getElementById('openLink');
     const statusEl = document.getElementById('status');
@@ -92,8 +127,11 @@
     let alignMode = 'center';
     let currentFile = null;
     let outputBlob = null;
+    let currentPdfBytes = null;
     let currentBlobUrl = null;
     let outputFileName = 'label_fixed.pdf';
+    let previewPageNum = 1;
+    let totalPagesCount = 1;
 
     function updateModeUI(mode) {
       alignMode = mode;
@@ -125,7 +163,43 @@
       } catch (e) {}
     }
 
-    async function processPDF() {
+    async function renderPreview() {
+      if (!currentPdfBytes || typeof pdfjsLib === 'undefined') return;
+      try {
+        const loadingTask = pdfjsLib.getDocument({ data: currentPdfBytes.slice(0) });
+        const pdf = await loadingTask.promise;
+        totalPagesCount = pdf.numPages;
+        if (previewPageNum > totalPagesCount) previewPageNum = totalPagesCount;
+        if (previewPageNum < 1) previewPageNum = 1;
+
+        const page = await pdf.getPage(previewPageNum);
+        const dpr = Math.min(window.devicePixelRatio || 2, 3);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const targetWidth = Math.min(280, window.innerWidth - 96);
+        const scale = (targetWidth / baseViewport.width) * dpr;
+        const viewport = page.getViewport({ scale });
+
+        previewCanvas.width = viewport.width;
+        previewCanvas.height = viewport.height;
+        previewCanvas.style.width = targetWidth + 'px';
+        previewCanvas.style.height = Math.round(baseViewport.height * (targetWidth / baseViewport.width)) + 'px';
+
+        const ctx = previewCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        pageIndicator.textContent = `Стр. ${previewPageNum} / ${totalPagesCount}`;
+        prevPageBtn.disabled = previewPageNum <= 1;
+        nextPageBtn.disabled = previewPageNum >= totalPagesCount;
+        previewBox.style.display = 'block';
+      } catch (e) {
+        // Если предпросмотр не отрисовался, не блокируем основную работу
+      }
+    }
+
+    async function processPDF(isNewFile = false) {
       saveSettings();
       if (!currentFile) return;
 
@@ -174,6 +248,7 @@
         }
 
         const pdfBytes = await outDoc.save();
+        currentPdfBytes = pdfBytes;
         outputBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         outputFileName = 'fixed_' + currentFile.name;
 
@@ -184,6 +259,11 @@
         openLink.style.display = 'block';
         shareBtn.classList.add('ready');
 
+        if (isNewFile) {
+          previewPageNum = (pageCount > 1 && skipFirst) ? 2 : 1;
+        }
+        await renderPreview();
+
         const shifted = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
         const modeText = alignMode === 'center' ? `центр, ${scaleInput.value}%` : `сдвиг ${shiftMm} мм, ${scaleInput.value}%`;
         statusEl.textContent = `Готово (${modeText}): страниц ${pageCount}, изменено ${shifted}`;
@@ -192,17 +272,31 @@
       }
     }
 
+    prevPageBtn.addEventListener('click', () => {
+      if (previewPageNum > 1) {
+        previewPageNum--;
+        renderPreview();
+      }
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+      if (previewPageNum < totalPagesCount) {
+        previewPageNum++;
+        renderPreview();
+      }
+    });
+
     modeCenterBtn.addEventListener('click', () => {
       updateModeUI('center');
       shiftInput.value = '0';
       if (parseFloat(scaleInput.value) > 95) scaleInput.value = '90';
-      processPDF();
+      processPDF(false);
     });
 
     modeShiftBtn.addEventListener('click', () => {
       updateModeUI('shift');
       if (parseFloat(shiftInput.value) === 0) shiftInput.value = '3';
-      processPDF();
+      processPDF(false);
     });
 
     document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -210,7 +304,7 @@
         updateModeUI(btn.dataset.mode);
         shiftInput.value = btn.dataset.shift;
         scaleInput.value = btn.dataset.scale;
-        processPDF();
+        processPDF(false);
       });
     });
 
@@ -218,11 +312,11 @@
       if (e.target.files && e.target.files[0]) {
         currentFile = e.target.files[0];
         e.target.value = '';
-        processPDF();
+        processPDF(true);
       }
     });
 
-    [shiftInput, scaleInput, skipFirstInput].forEach(el => el.addEventListener('change', processPDF));
+    [shiftInput, scaleInput, skipFirstInput].forEach(el => el.addEventListener('change', () => processPDF(false)));
 
     shareBtn.addEventListener('click', async () => {
       if (!outputBlob) {
