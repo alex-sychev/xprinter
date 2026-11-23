@@ -4,84 +4,72 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Xprinter PDF Сдвиг</title>
-  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';document.head.appendChild(s);"></script>
   <style>
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body {
-      margin: 0; padding: 24px 16px;
-      background: #111315; color: #f2f4f7;
-      display: flex; justify-content: center;
-    }
-    .card {
-      width: 100%; max-width: 440px;
-      background: #1b1e22; border-radius: 16px;
-      padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    }
-    h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; }
-    .sub { font-size: 13px; color: #98a2b3; margin: 0 0 20px; }
-    .file-btn {
-      display: block; width: 100%; padding: 16px;
-      background: #2563eb; color: #fff; text-align: center;
-      border-radius: 12px; font-size: 16px; font-weight: 600;
-      cursor: pointer; border: none; margin-bottom: 18px;
-    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; padding: 20px 16px; background: #111315; color: #f2f4f7; display: flex; justify-content: center; }
+    .card { width: 100%; max-width: 440px; background: #1b1e22; border-radius: 16px; padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    .sub { font-size: 13px; color: #98a2b3; margin: 0 0 16px; }
+    .file-btn { display: block; width: 100%; padding: 16px; background: #2563eb; color: #fff; text-align: center; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 16px; cursor: pointer; }
     .file-btn:active { background: #1d4ed8; }
     input[type="file"] { display: none; }
+
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #121417; padding: 4px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 12px; }
+    .tab-btn { padding: 10px 8px; border: none; border-radius: 8px; background: transparent; color: #98a2b3; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .tab-btn.active { background: #2e333a; color: #fff; }
+
+    .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .preset-btn { padding: 10px 8px; border-radius: 10px; border: 1px solid #2e333a; background: #121417; color: #e4e7ec; font-size: 13px; font-weight: 500; cursor: pointer; text-align: center; }
+    .preset-btn:active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
     label.field { display: block; font-size: 12px; color: #98a2b3; margin-bottom: 6px; }
-    input[type="number"] {
-      width: 100%; padding: 12px; border-radius: 10px;
-      border: 1px solid #2e333a; background: #121417;
-      color: #fff; font-size: 16px; font-weight: 500;
-    }
-    .check-row {
-      display: flex; align-items: center; gap: 10px;
-      background: #121417; padding: 12px; border-radius: 10px;
-      border: 1px solid #2e333a; margin-bottom: 18px; font-size: 14px;
-    }
+    input[type="number"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #2e333a; background: #121417; color: #fff; font-size: 16px; }
+    .check-row { display: flex; align-items: center; gap: 10px; background: #121417; padding: 12px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 16px; font-size: 14px; }
     input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; }
-    .action-btn {
-      display: block; width: 100%; padding: 16px;
-      background: #2e333a; color: #98a2b3; border: none;
-      border-radius: 12px; font-size: 16px; font-weight: 600;
-      cursor: pointer; margin-bottom: 10px;
-    }
+    .action-btn { display: block; width: 100%; padding: 16px; background: #2e333a; color: #98a2b3; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 10px; cursor: pointer; }
     .action-btn.ready { background: #16a34a; color: #fff; }
     .action-btn.ready:active { background: #15803d; }
-    .alt-link {
-      display: none; text-align: center; color: #60a5fa;
-      font-size: 14px; text-decoration: none; padding: 8px;
-    }
-    .status {
-      font-size: 13px; color: #98a2b3; text-align: center;
-      min-height: 20px; margin-top: 8px; line-height: 1.4;
-    }
+    .alt-link { display: none; text-align: center; color: #60a5fa; font-size: 14px; text-decoration: none; padding: 8px; }
+    .status { font-size: 13px; color: #98a2b3; text-align: center; min-height: 20px; margin-top: 8px; line-height: 1.4; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Сдвиг PDF для Xprinter</h1>
-    <p class="sub">Векторная коррекция отступа слева без потери качества</p>
+    <p class="sub">Векторная коррекция полей без потери качества</p>
 
     <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
-    <input type="file" id="pdfInput" accept="application/pdf">
+    <input type="file" id="pdfInput" accept="application/pdf,.pdf">
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" id="modeCenterBtn">По центру</button>
+      <button type="button" class="tab-btn" id="modeShiftBtn">Сдвиг вправо</button>
+    </div>
+
+    <div class="presets">
+      <button type="button" class="preset-btn" data-mode="center" data-shift="0" data-scale="92">Центр 92% (узкие поля)</button>
+      <button type="button" class="preset-btn" data-mode="center" data-shift="0" data-scale="88">Центр 88% (широкие поля)</button>
+      <button type="button" class="preset-btn" data-mode="shift" data-shift="2.5" data-scale="93">Сдвиг +2.5 мм (93%)</button>
+      <button type="button" class="preset-btn" data-mode="shift" data-shift="3.5" data-scale="91">Сдвиг +3.5 мм (91%)</button>
+    </div>
 
     <div class="grid">
       <div>
-        <label class="field" for="shiftMm">Сдвиг вправо (мм)</label>
-        <input type="number" id="shiftMm" step="0.5" value="3">
+        <label class="field" id="shiftLabel" for="shiftMm">Доп. сдвиг (мм)</label>
+        <input type="number" id="shiftMm" step="0.5" value="0">
       </div>
       <div>
         <label class="field" for="scalePct">Масштаб (%)</label>
-        <input type="number" id="scalePct" step="1" value="93">
+        <input type="number" id="scalePct" step="1" value="90">
       </div>
     </div>
 
     <label class="check-row">
       <input type="checkbox" id="skipFirst" checked>
-      <span>Не сдвигать 1-ю страницу (оставить как есть)</span>
+      <span>Не трогать 1-ю страницу (оставить как есть)</span>
     </label>
 
     <button class="action-btn" id="shareBtn">Отправить в Xprinter</button>
@@ -91,6 +79,9 @@
 
   <script>
     const pdfInput = document.getElementById('pdfInput');
+    const modeCenterBtn = document.getElementById('modeCenterBtn');
+    const modeShiftBtn = document.getElementById('modeShiftBtn');
+    const shiftLabel = document.getElementById('shiftLabel');
     const shiftInput = document.getElementById('shiftMm');
     const scaleInput = document.getElementById('scalePct');
     const skipFirstInput = document.getElementById('skipFirst');
@@ -98,21 +89,36 @@
     const openLink = document.getElementById('openLink');
     const statusEl = document.getElementById('status');
 
+    let alignMode = 'center';
     let currentFile = null;
     let outputBlob = null;
     let currentBlobUrl = null;
     let outputFileName = 'label_fixed.pdf';
 
-    try {
-      if (localStorage.getItem('xp_shift')) shiftInput.value = localStorage.getItem('xp_shift');
-      if (localStorage.getItem('xp_scale')) scaleInput.value = localStorage.getItem('xp_scale');
-      if (localStorage.getItem('xp_skip1') !== null) {
-        skipFirstInput.checked = localStorage.getItem('xp_skip1') === 'true';
+    function updateModeUI(mode) {
+      alignMode = mode;
+      if (mode === 'center') {
+        modeCenterBtn.classList.add('active');
+        modeShiftBtn.classList.remove('active');
+        shiftLabel.textContent = 'Доп. сдвиг от центра (мм)';
+      } else {
+        modeShiftBtn.classList.add('active');
+        modeCenterBtn.classList.remove('active');
+        shiftLabel.textContent = 'Отступ слева (мм)';
       }
+    }
+
+    try {
+      const savedMode = localStorage.getItem('xp_mode') || 'center';
+      updateModeUI(savedMode);
+      if (localStorage.getItem('xp_shift') !== null) shiftInput.value = localStorage.getItem('xp_shift');
+      if (localStorage.getItem('xp_scale') !== null) scaleInput.value = localStorage.getItem('xp_scale');
+      if (localStorage.getItem('xp_skip1') !== null) skipFirstInput.checked = localStorage.getItem('xp_skip1') === 'true';
     } catch (e) {}
 
     function saveSettings() {
       try {
+        localStorage.setItem('xp_mode', alignMode);
         localStorage.setItem('xp_shift', shiftInput.value);
         localStorage.setItem('xp_scale', scaleInput.value);
         localStorage.setItem('xp_skip1', skipFirstInput.checked);
@@ -120,11 +126,11 @@
     }
 
     async function processPDF() {
-      if (!currentFile) return;
       saveSettings();
+      if (!currentFile) return;
 
       if (typeof PDFLib === 'undefined') {
-        statusEl.textContent = 'Ошибка: нет интернета для загрузки модуля PDF.';
+        statusEl.textContent = 'Модуль PDF ещё загружается — подождите 2 секунды и выберите файл снова.';
         return;
       }
 
@@ -132,7 +138,7 @@
       try {
         const arrayBuffer = await currentFile.arrayBuffer();
         const { PDFDocument } = PDFLib;
-        const srcDoc = await PDFDocument.load(arrayBuffer);
+        const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
         const outDoc = await PDFDocument.create();
 
         const pageCount = srcDoc.getPageCount();
@@ -153,7 +159,9 @@
 
             const scaledW = width * scale;
             const scaledH = height * scale;
-            const xOffset = shiftMm * mmToPt;
+            const xOffset = alignMode === 'center'
+              ? ((width - scaledW) / 2) + (shiftMm * mmToPt)
+              : shiftMm * mmToPt;
             const yOffset = (height - scaledH) / 2;
 
             newPage.drawPage(embeddedPage, {
@@ -176,54 +184,45 @@
         openLink.style.display = 'block';
         shareBtn.classList.add('ready');
 
-        const shiftedCount = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
-        statusEl.textContent = `Готово: страниц ${pageCount} (сдвинуто: ${shiftedCount})`;
+        const shifted = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
+        const modeText = alignMode === 'center' ? `центр, ${scaleInput.value}%` : `сдвиг ${shiftMm} мм, ${scaleInput.value}%`;
+        statusEl.textContent = `Готово (${modeText}): страниц ${pageCount}, изменено ${shifted}`;
       } catch (err) {
-        statusEl.textContent = 'Ошибка чтения PDF: ' + err.message;
+        statusEl.textContent = 'Ошибка PDF: ' + err.message;
       }
     }
 
-    function loadFromHash() {
-      const hash = window.location.hash;
-      const fromShortcut = window.location.search.includes('sc=1');
+    modeCenterBtn.addEventListener('click', () => {
+      updateModeUI('center');
+      shiftInput.value = '0';
+      if (parseFloat(scaleInput.value) > 95) scaleInput.value = '90';
+      processPDF();
+    });
 
-      if (!hash || !hash.startsWith('#pdf=')) {
-        if (fromShortcut) {
-          statusEl.textContent = 'iOS обрезала слишком большой PDF при передаче по ссылке — выберите файл синей кнопкой выше.';
-          history.replaceState(null, '', window.location.pathname);
-        }
-        return;
-      }
+    modeShiftBtn.addEventListener('click', () => {
+      updateModeUI('shift');
+      if (parseFloat(shiftInput.value) === 0) shiftInput.value = '3';
+      processPDF();
+    });
 
-      try {
-        let raw = decodeURIComponent(hash.slice(5)).replace(/\s+/g, '');
-        raw = raw.replace(/-/g, '+').replace(/_/g, '/');
-        while (raw.length % 4 !== 0) {
-          raw += '=';
-        }
-        const binary = atob(raw);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        currentFile = new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
-        history.replaceState(null, '', window.location.pathname);
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        updateModeUI(btn.dataset.mode);
+        shiftInput.value = btn.dataset.shift;
+        scaleInput.value = btn.dataset.scale;
         processPDF();
-      } catch (e) {
-        statusEl.textContent = 'Ошибка чтения PDF из ссылки (файл обрезан iOS): ' + e.message;
-      }
-    }
+      });
+    });
 
     pdfInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files[0]) {
         currentFile = e.target.files[0];
+        e.target.value = '';
         processPDF();
       }
     });
 
-    [shiftInput, scaleInput, skipFirstInput].forEach(el => {
-      el.addEventListener('change', processPDF);
-    });
+    [shiftInput, scaleInput, skipFirstInput].forEach(el => el.addEventListener('change', processPDF));
 
     shareBtn.addEventListener('click', async () => {
       if (!outputBlob) {
@@ -239,9 +238,6 @@
         window.open(openLink.href, '_blank');
       }
     });
-
-    window.addEventListener('DOMContentLoaded', loadFromHash);
-    window.addEventListener('hashchange', loadFromHash);
   </script>
 </body>
 </html>
