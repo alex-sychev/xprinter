@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Xprinter PDF">
   <title>Xprinter PDF Сдвиг</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';document.head.appendChild(s);"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -11,8 +13,16 @@
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     body { margin: 0; padding: 16px; background: #111315; color: #f2f4f7; display: flex; justify-content: center; }
     .card { width: 100%; max-width: 440px; background: #1b1e22; border-radius: 16px; padding: 18px; }
+
+    .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
     h1 { font-size: 20px; margin: 0 0 4px; }
-    .sub { font-size: 13px; color: #98a2b3; margin: 0 0 12px; }
+    .sub { font-size: 13px; color: #98a2b3; margin: 0; }
+    .refresh-btn {
+      flex-shrink: 0; padding: 8px 11px; border-radius: 10px;
+      border: 1px solid #2e333a; background: #121417; color: #98a2b3;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .refresh-btn:active { background: #2e333a; color: #fff; }
 
     .status-bar {
       font-size: 13px; color: #cbd5e1; background: #121417;
@@ -62,8 +72,14 @@
 </head>
 <body>
   <div class="card">
-    <h1>Сдвиг PDF для Xprinter</h1>
-    <p class="sub">Векторная коррекция полей без потери качества</p>
+    <div class="header-row">
+      <div>
+        <h1>Сдвиг PDF для Xprinter</h1>
+        <p class="sub">Векторная коррекция полей без потери качества</p>
+      </div>
+      <button type="button" class="refresh-btn" id="refreshBtn">↻ Обновить</button>
+    </div>
+
     <div class="status-bar" id="status">Выберите сохранённый PDF с этикетками</div>
 
     <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
@@ -123,6 +139,11 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
 
+    if (window.location.search.includes('v=')) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+
+    const refreshBtn = document.getElementById('refreshBtn');
     const pdfInput = document.getElementById('pdfInput');
     const p1Buttons = document.querySelectorAll('.p1-btn');
     const modeCenterBtn = document.getElementById('modeCenterBtn');
@@ -140,7 +161,7 @@
     const statusEl = document.getElementById('status');
 
     let alignMode = 'center';
-    let p1Mode = 'shift'; // 'shift' | 'keep' | 'exclude'
+    let p1Mode = 'shift';
     let currentFile = null;
     let outputBlob = null;
     let currentPdfBytes = null;
@@ -148,6 +169,11 @@
     let outputFileName = 'label_fixed.pdf';
     let previewPageNum = 1;
     let totalPagesCount = 1;
+
+    refreshBtn.addEventListener('click', () => {
+      setStatus('Обновление страницы...', 'warn');
+      window.location.replace(window.location.pathname + '?v=' + Date.now());
+    });
 
     function setStatus(text, type = '') {
       statusEl.textContent = text;
