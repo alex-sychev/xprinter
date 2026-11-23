@@ -163,6 +163,14 @@
       } catch (e) {}
     }
 
+    async function waitForPdfLib(maxMs = 6000) {
+      const start = Date.now();
+      while (typeof PDFLib === 'undefined' && Date.now() - start < maxMs) {
+        await new Promise(r => setTimeout(r, 250));
+      }
+      return typeof PDFLib !== 'undefined';
+    }
+
     async function renderPreview() {
       if (!currentPdfBytes || typeof pdfjsLib === 'undefined') return;
       try {
@@ -194,21 +202,20 @@
         prevPageBtn.disabled = previewPageNum <= 1;
         nextPageBtn.disabled = previewPageNum >= totalPagesCount;
         previewBox.style.display = 'block';
-      } catch (e) {
-        // Если предпросмотр не отрисовался, не блокируем основную работу
-      }
+      } catch (e) {}
     }
 
     async function processPDF(isNewFile = false) {
       saveSettings();
       if (!currentFile) return;
 
-      if (typeof PDFLib === 'undefined') {
-        statusEl.textContent = 'Модуль PDF ещё загружается — подождите 2 секунды и выберите файл снова.';
+      statusEl.textContent = 'Обработка страниц...';
+      const ready = await waitForPdfLib();
+      if (!ready) {
+        statusEl.textContent = 'Не удалось загрузить модуль PDF — проверьте интернет.';
         return;
       }
 
-      statusEl.textContent = 'Обработка страниц...';
       try {
         const arrayBuffer = await currentFile.arrayBuffer();
         const { PDFDocument } = PDFLib;
@@ -272,6 +279,37 @@
       }
     }
 
+    function loadFromHash() {
+      const hash = window.location.hash;
+      const fromShortcut = window.location.search.includes('sc=1');
+
+      if (!hash || !hash.startsWith('#pdf=')) {
+        if (fromShortcut) {
+          statusEl.textContent = 'iOS обрезала слишком большой файл при передаче по ссылке — выберите его синей кнопкой выше.';
+          history.replaceState(null, '', window.location.pathname);
+        }
+        return;
+      }
+
+      try {
+        let raw = decodeURIComponent(hash.slice(5)).replace(/\s+/g, '');
+        raw = raw.replace(/-/g, '+').replace(/_/g, '/');
+        while (raw.length % 4 !== 0) {
+          raw += '=';
+        }
+        const binary = atob(raw);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        currentFile = new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
+        history.replaceState(null, '', window.location.pathname);
+        processPDF(true);
+      } catch (e) {
+        statusEl.textContent = 'Ошибка чтения PDF из ссылки: ' + e.message;
+      }
+    }
+
     prevPageBtn.addEventListener('click', () => {
       if (previewPageNum > 1) {
         previewPageNum--;
@@ -332,6 +370,9 @@
         window.open(openLink.href, '_blank');
       }
     });
+
+    window.addEventListener('DOMContentLoaded', loadFromHash);
+    window.addEventListener('hashchange', loadFromHash);
   </script>
 </body>
 </html>
