@@ -17,7 +17,7 @@
     .status-bar {
       font-size: 13px; color: #cbd5e1; background: #121417;
       border: 1px solid #2e333a; border-radius: 10px;
-      padding: 10px 12px; margin-bottom: 14px; line-height: 1.4;
+      padding: 10px 12px; margin-bottom: 14px; line-height: 1.4; word-break: break-word;
     }
     .status-bar.ok { border-color: #16a34a; color: #86efac; background: #0f2417; }
     .status-bar.warn { border-color: #3b82f6; color: #93c5fd; background: #131f33; }
@@ -27,7 +27,7 @@
     .file-btn:active { background: #1d4ed8; }
     .paste-btn { display: block; width: 100%; padding: 14px; background: #1e293b; color: #93c5fd; border: 1px solid #3b82f6; text-align: center; border-radius: 12px; font-size: 15px; font-weight: 600; margin-bottom: 12px; cursor: pointer; }
     .paste-btn.highlight { background: #1d4ed8; color: #fff; border-color: #60a5fa; }
-    .manual-paste { display: none; width: 100%; padding: 12px; border-radius: 10px; border: 1px dashed #60a5fa; background: #121417; color: #fff; font-size: 15px; margin-bottom: 14px; }
+    .manual-paste { display: none; width: 100%; padding: 12px; border-radius: 10px; border: 1.5px dashed #60a5fa; background: #121417; color: #fff; font-size: 16px; margin-bottom: 14px; resize: none; }
     input[type="file"] { display: none; }
 
     .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #121417; padding: 4px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 12px; }
@@ -68,7 +68,7 @@
     <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
     <input type="file" id="pdfInput" accept="application/pdf,.pdf">
     <button type="button" class="paste-btn" id="pasteBtn">Вставить PDF из буфера</button>
-    <input type="text" class="manual-paste" id="manualPaste" placeholder="Нажмите сюда и выберите «Вставить»">
+    <textarea class="manual-paste" id="manualPaste" rows="2" placeholder="Нажмите сюда и выберите «Вставить»"></textarea>
 
     <div class="tabs">
       <button type="button" class="tab-btn active" id="modeCenterBtn">По центру</button>
@@ -193,16 +193,31 @@
     }
 
     function base64ToFile(rawInput) {
-      let raw = rawInput.trim();
+      let raw = (rawInput || '').trim();
       if (raw.includes('#pdf=')) raw = raw.split('#pdf=')[1];
       if (raw.startsWith('data:')) raw = raw.split(',')[1] || '';
       try { raw = decodeURIComponent(raw); } catch (e) {}
-      raw = raw.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
-      while (raw.length % 4 !== 0) raw += '=';
-      const binary = atob(raw);
-      if (binary.length < 50 || !binary.startsWith('%PDF')) {
-        throw new Error('В буфере не PDF (сначала запустите обновлённую команду из Ozon)');
+      raw = raw.replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/=]/g, '');
+
+      const pdfStart = raw.indexOf('JVBERi0');
+      if (pdfStart > 0) {
+        raw = raw.slice(pdfStart);
       }
+
+      raw = raw.replace(/=+$/, '');
+      if (raw.length % 4 === 1) {
+        raw = raw.slice(0, -1);
+      }
+      while (raw.length % 4 !== 0) {
+        raw += '=';
+      }
+
+      if (raw.length < 60 || !raw.startsWith('JVBERi0')) {
+        const preview = (rawInput || '').trim().slice(0, 45);
+        throw new Error('В буфере не PDF-код, а: «' + (preview || 'пусто') + '». Проверьте 3-й блок в Командах.');
+      }
+
+      const binary = atob(raw);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       return new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
@@ -342,15 +357,17 @@
     });
 
     manualPaste.addEventListener('input', () => {
-      const val = manualPaste.value;
-      manualPaste.value = '';
-      if (!val) return;
-      try {
-        currentFile = base64ToFile(val);
-        processPDF(true);
-      } catch (err) {
-        setStatus(err.message, 'err');
-      }
+      setTimeout(() => {
+        const val = manualPaste.value;
+        manualPaste.value = '';
+        if (!val) return;
+        try {
+          currentFile = base64ToFile(val);
+          processPDF(true);
+        } catch (err) {
+          setStatus(err.message, 'err');
+        }
+      }, 50);
     });
 
     function checkUrlParams() {
