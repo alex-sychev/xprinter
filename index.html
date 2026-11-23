@@ -9,14 +9,25 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    body { margin: 0; padding: 20px 16px; background: #111315; color: #f2f4f7; display: flex; justify-content: center; }
-    .card { width: 100%; max-width: 440px; background: #1b1e22; border-radius: 16px; padding: 20px; }
-    h1 { font-size: 20px; margin: 0 0 6px; }
-    .sub { font-size: 13px; color: #98a2b3; margin: 0 0 16px; }
+    body { margin: 0; padding: 16px; background: #111315; color: #f2f4f7; display: flex; justify-content: center; }
+    .card { width: 100%; max-width: 440px; background: #1b1e22; border-radius: 16px; padding: 18px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { font-size: 13px; color: #98a2b3; margin: 0 0 12px; }
+
+    .status-bar {
+      font-size: 13px; color: #cbd5e1; background: #121417;
+      border: 1px solid #2e333a; border-radius: 10px;
+      padding: 10px 12px; margin-bottom: 14px; line-height: 1.4;
+    }
+    .status-bar.ok { border-color: #16a34a; color: #86efac; background: #0f2417; }
+    .status-bar.warn { border-color: #3b82f6; color: #93c5fd; background: #131f33; }
+    .status-bar.err { border-color: #ef4444; color: #fca5a5; background: #291315; }
+
     .file-btn { display: block; width: 100%; padding: 15px; background: #2563eb; color: #fff; text-align: center; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 10px; cursor: pointer; border: none; }
     .file-btn:active { background: #1d4ed8; }
-    .paste-btn { display: block; width: 100%; padding: 14px; background: #1e293b; color: #93c5fd; border: 1px solid #3b82f6; text-align: center; border-radius: 12px; font-size: 15px; font-weight: 600; margin-bottom: 16px; cursor: pointer; }
+    .paste-btn { display: block; width: 100%; padding: 14px; background: #1e293b; color: #93c5fd; border: 1px solid #3b82f6; text-align: center; border-radius: 12px; font-size: 15px; font-weight: 600; margin-bottom: 12px; cursor: pointer; }
     .paste-btn.highlight { background: #1d4ed8; color: #fff; border-color: #60a5fa; }
+    .manual-paste { display: none; width: 100%; padding: 12px; border-radius: 10px; border: 1px dashed #60a5fa; background: #121417; color: #fff; font-size: 15px; margin-bottom: 14px; }
     input[type="file"] { display: none; }
 
     .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #121417; padding: 4px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 12px; }
@@ -46,17 +57,18 @@
     .action-btn.ready { background: #16a34a; color: #fff; }
     .action-btn.ready:active { background: #15803d; }
     .alt-link { display: none; text-align: center; color: #60a5fa; font-size: 14px; text-decoration: none; padding: 8px; }
-    .status { font-size: 13px; color: #98a2b3; text-align: center; min-height: 20px; margin-top: 8px; line-height: 1.4; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Сдвиг PDF для Xprinter</h1>
     <p class="sub">Векторная коррекция полей без потери качества</p>
+    <div class="status-bar" id="status">Ожидание PDF-файла...</div>
 
     <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
     <input type="file" id="pdfInput" accept="application/pdf,.pdf">
     <button type="button" class="paste-btn" id="pasteBtn">Вставить PDF из буфера</button>
+    <input type="text" class="manual-paste" id="manualPaste" placeholder="Нажмите сюда и выберите «Вставить»">
 
     <div class="tabs">
       <button type="button" class="tab-btn active" id="modeCenterBtn">По центру</button>
@@ -103,7 +115,6 @@
 
     <button class="action-btn" id="shareBtn">Отправить в Xprinter</button>
     <a class="alt-link" id="openLink" target="_blank">Открыть PDF в новой вкладке</a>
-    <div class="status" id="status">Ожидание PDF-файла...</div>
   </div>
 
   <script>
@@ -113,6 +124,7 @@
 
     const pdfInput = document.getElementById('pdfInput');
     const pasteBtn = document.getElementById('pasteBtn');
+    const manualPaste = document.getElementById('manualPaste');
     const modeCenterBtn = document.getElementById('modeCenterBtn');
     const modeShiftBtn = document.getElementById('modeShiftBtn');
     const shiftLabel = document.getElementById('shiftLabel');
@@ -136,6 +148,11 @@
     let outputFileName = 'label_fixed.pdf';
     let previewPageNum = 1;
     let totalPagesCount = 1;
+
+    function setStatus(text, type = '') {
+      statusEl.textContent = text;
+      statusEl.className = 'status-bar' + (type ? ' ' + type : '');
+    }
 
     function updateModeUI(mode) {
       alignMode = mode;
@@ -183,7 +200,9 @@
       raw = raw.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
       while (raw.length % 4 !== 0) raw += '=';
       const binary = atob(raw);
-      if (binary.length < 50) throw new Error('В буфере нет корректного PDF');
+      if (binary.length < 50 || !binary.startsWith('%PDF')) {
+        throw new Error('В буфере не PDF (сначала запустите обновлённую команду из Ozon)');
+      }
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       return new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
@@ -227,14 +246,187 @@
       saveSettings();
       if (!currentFile) return;
 
-      statusEl.textContent = 'Обработка страниц...';
+      setStatus('Обработка страниц...', 'warn');
       const ready = await waitForPdfLib();
       if (!ready) {
-        statusEl.textContent = 'Не удалось загрузить модуль PDF — проверьте интернет.';
+        setStatus('Не удалось загрузить модуль PDF — проверьте интернет.', 'err');
         return;
       }
 
       try {
         const arrayBuffer = await currentFile.arrayBuffer();
         const { PDFDocument } = PDFLib;
-        const srcDoc = await PDFDocument.load
+        const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        const outDoc = await PDFDocument.create();
+
+        const pageCount = srcDoc.getPageCount();
+        const shiftMm = parseFloat(shiftInput.value) || 0;
+        const scale = (parseFloat(scaleInput.value) || 100) / 100;
+        const skipFirst = skipFirstInput.checked;
+        const mmToPt = 2.83465;
+
+        for (let i = 0; i < pageCount; i++) {
+          if (i === 0 && skipFirst) {
+            const [copiedPage] = await outDoc.copyPages(srcDoc, [0]);
+            outDoc.addPage(copiedPage);
+          } else {
+            const srcPage = srcDoc.getPage(i);
+            const { width, height } = srcPage.getSize();
+            const embeddedPage = await outDoc.embedPage(srcPage);
+            const newPage = outDoc.addPage([width, height]);
+
+            const scaledW = width * scale;
+            const scaledH = height * scale;
+            const xOffset = alignMode === 'center'
+              ? ((width - scaledW) / 2) + (shiftMm * mmToPt)
+              : shiftMm * mmToPt;
+            const yOffset = (height - scaledH) / 2;
+
+            newPage.drawPage(embeddedPage, {
+              x: xOffset,
+              y: yOffset,
+              width: scaledW,
+              height: scaledH
+            });
+          }
+        }
+
+        const pdfBytes = await outDoc.save();
+        currentPdfBytes = pdfBytes;
+        outputBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+        outputFileName = 'fixed_' + currentFile.name;
+
+        if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+        currentBlobUrl = URL.createObjectURL(outputBlob);
+
+        openLink.href = currentBlobUrl;
+        openLink.style.display = 'block';
+        shareBtn.classList.add('ready');
+        pasteBtn.classList.remove('highlight');
+        manualPaste.style.display = 'none';
+
+        if (isNewFile) {
+          previewPageNum = (pageCount > 1 && skipFirst) ? 2 : 1;
+        }
+        await renderPreview();
+
+        const shifted = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
+        const modeText = alignMode === 'center' ? `центр, ${scaleInput.value}%` : `сдвиг ${shiftMm} мм, ${scaleInput.value}%`;
+        setStatus(`Готово (${modeText}): страниц ${pageCount}, изменено ${shifted}`, 'ok');
+      } catch (err) {
+        setStatus('Ошибка PDF: ' + err.message, 'err');
+      }
+    }
+
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.readText) {
+          throw new Error('blocked');
+        }
+        const text = await navigator.clipboard.readText();
+        if (!text) {
+          setStatus('Буфер обмена пуст — сначала отправьте этикетку через команду из Ozon.', 'err');
+          return;
+        }
+        currentFile = base64ToFile(text);
+        processPDF(true);
+      } catch (err) {
+        if (err.message && err.message.startsWith('В буфере не PDF')) {
+          setStatus(err.message, 'err');
+        } else {
+          manualPaste.style.display = 'block';
+          manualPaste.focus();
+          setStatus('Нажмите на поле ниже и выберите системную кнопку «Вставить».', 'warn');
+        }
+      }
+    });
+
+    manualPaste.addEventListener('input', () => {
+      const val = manualPaste.value;
+      manualPaste.value = '';
+      if (!val) return;
+      try {
+        currentFile = base64ToFile(val);
+        processPDF(true);
+      } catch (err) {
+        setStatus(err.message, 'err');
+      }
+    });
+
+    function checkUrlParams() {
+      const search = window.location.search;
+      if (search.includes('cb=1')) {
+        pasteBtn.classList.add('highlight');
+        setStatus('Файл скопирован командой — нажмите «Вставить PDF из буфера» ниже и подтвердите «Вставить».', 'warn');
+        history.replaceState(null, '', window.location.pathname);
+      } else if (search.includes('sc=1')) {
+        setStatus('Команда использует старую ссылку — переключите её на буфер обмена или выберите файл вручную.', 'err');
+        history.replaceState(null, '', window.location.pathname);
+      }
+    }
+
+    prevPageBtn.addEventListener('click', () => {
+      if (previewPageNum > 1) {
+        previewPageNum--;
+        renderPreview();
+      }
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+      if (previewPageNum < totalPagesCount) {
+        previewPageNum++;
+        renderPreview();
+      }
+    });
+
+    modeCenterBtn.addEventListener('click', () => {
+      updateModeUI('center');
+      shiftInput.value = '0';
+      if (parseFloat(scaleInput.value) > 95) scaleInput.value = '90';
+      processPDF(false);
+    });
+
+    modeShiftBtn.addEventListener('click', () => {
+      updateModeUI('shift');
+      if (parseFloat(shiftInput.value) === 0) shiftInput.value = '3';
+      processPDF(false);
+    });
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        updateModeUI(btn.dataset.mode);
+        shiftInput.value = btn.dataset.shift;
+        scaleInput.value = btn.dataset.scale;
+        processPDF(false);
+      });
+    });
+
+    pdfInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        currentFile = e.target.files[0];
+        e.target.value = '';
+        processPDF(true);
+      }
+    });
+
+    [shiftInput, scaleInput, skipFirstInput].forEach(el => el.addEventListener('change', () => processPDF(false)));
+
+    shareBtn.addEventListener('click', async () => {
+      if (!outputBlob) {
+        setStatus('Сначала загрузите PDF или вставьте его из буфера обмена.', 'err');
+        return;
+      }
+      const file = new File([outputBlob], outputFileName, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch (err) {}
+      } else {
+        window.open(openLink.href, '_blank');
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', checkUrlParams);
+  </script>
+</body>
+</html>
