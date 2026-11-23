@@ -17,22 +17,25 @@
     .status-bar {
       font-size: 13px; color: #cbd5e1; background: #121417;
       border: 1px solid #2e333a; border-radius: 10px;
-      padding: 10px 12px; margin-bottom: 14px; line-height: 1.4; word-break: break-word;
+      padding: 10px 12px; margin-bottom: 14px; line-height: 1.4;
     }
     .status-bar.ok { border-color: #16a34a; color: #86efac; background: #0f2417; }
     .status-bar.warn { border-color: #3b82f6; color: #93c5fd; background: #131f33; }
     .status-bar.err { border-color: #ef4444; color: #fca5a5; background: #291315; }
 
-    .file-btn { display: block; width: 100%; padding: 15px; background: #2563eb; color: #fff; text-align: center; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 10px; cursor: pointer; border: none; }
+    .file-btn { display: block; width: 100%; padding: 16px; background: #2563eb; color: #fff; text-align: center; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 14px; cursor: pointer; border: none; }
     .file-btn:active { background: #1d4ed8; }
-    .paste-btn { display: block; width: 100%; padding: 14px; background: #1e293b; color: #93c5fd; border: 1px solid #3b82f6; text-align: center; border-radius: 12px; font-size: 15px; font-weight: 600; margin-bottom: 12px; cursor: pointer; }
-    .paste-btn.highlight { background: #1d4ed8; color: #fff; border-color: #60a5fa; }
-    .manual-paste { display: none; width: 100%; padding: 12px; border-radius: 10px; border: 1.5px dashed #60a5fa; background: #121417; color: #fff; font-size: 16px; margin-bottom: 14px; resize: none; }
     input[type="file"] { display: none; }
+
+    .section-label { display: block; font-size: 12px; color: #98a2b3; margin-bottom: 6px; }
 
     .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #121417; padding: 4px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 12px; }
     .tab-btn { padding: 10px 8px; border: none; border-radius: 8px; background: transparent; color: #98a2b3; font-size: 14px; font-weight: 600; cursor: pointer; }
     .tab-btn.active { background: #2e333a; color: #fff; }
+
+    .p1-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; background: #121417; padding: 4px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 14px; }
+    .p1-btn { padding: 9px 4px; border: none; border-radius: 8px; background: transparent; color: #98a2b3; font-size: 12px; font-weight: 600; cursor: pointer; line-height: 1.25; text-align: center; }
+    .p1-btn.active { background: #2563eb; color: #fff; }
 
     .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .preset-btn { padding: 10px 8px; border-radius: 10px; border: 1px solid #2e333a; background: #121417; color: #e4e7ec; font-size: 13px; font-weight: 500; cursor: pointer; text-align: center; }
@@ -41,8 +44,6 @@
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
     label.field { display: block; font-size: 12px; color: #98a2b3; margin-bottom: 6px; }
     input[type="number"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #2e333a; background: #121417; color: #fff; font-size: 16px; }
-    .check-row { display: flex; align-items: center; gap: 10px; background: #121417; padding: 12px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 16px; font-size: 14px; }
-    input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; }
 
     .preview-box { display: none; background: #121417; border: 1px solid #2e333a; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
     .preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; color: #98a2b3; }
@@ -63,12 +64,17 @@
   <div class="card">
     <h1>Сдвиг PDF для Xprinter</h1>
     <p class="sub">Векторная коррекция полей без потери качества</p>
-    <div class="status-bar" id="status">Ожидание PDF-файла...</div>
+    <div class="status-bar" id="status">Выберите сохранённый PDF с этикетками</div>
 
     <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
     <input type="file" id="pdfInput" accept="application/pdf,.pdf">
-    <button type="button" class="paste-btn" id="pasteBtn">Вставить PDF из буфера</button>
-    <textarea class="manual-paste" id="manualPaste" rows="2" placeholder="Нажмите сюда и выберите «Вставить»"></textarea>
+
+    <span class="section-label">1-я страница в PDF</span>
+    <div class="p1-tabs">
+      <button type="button" class="p1-btn active" data-p1="shift">Печатать<br>(со сдвигом)</button>
+      <button type="button" class="p1-btn" data-p1="keep">Печатать<br>(как есть)</button>
+      <button type="button" class="p1-btn" data-p1="exclude">Не печатать<br>(убрать)</button>
+    </div>
 
     <div class="tabs">
       <button type="button" class="tab-btn active" id="modeCenterBtn">По центру</button>
@@ -92,11 +98,6 @@
         <input type="number" id="scalePct" step="1" value="90">
       </div>
     </div>
-
-    <label class="check-row">
-      <input type="checkbox" id="skipFirst" checked>
-      <span>Не трогать 1-ю страницу (оставить как есть)</span>
-    </label>
 
     <div class="preview-box" id="previewBox">
       <div class="preview-head">
@@ -123,14 +124,12 @@
     }
 
     const pdfInput = document.getElementById('pdfInput');
-    const pasteBtn = document.getElementById('pasteBtn');
-    const manualPaste = document.getElementById('manualPaste');
+    const p1Buttons = document.querySelectorAll('.p1-btn');
     const modeCenterBtn = document.getElementById('modeCenterBtn');
     const modeShiftBtn = document.getElementById('modeShiftBtn');
     const shiftLabel = document.getElementById('shiftLabel');
     const shiftInput = document.getElementById('shiftMm');
     const scaleInput = document.getElementById('scalePct');
-    const skipFirstInput = document.getElementById('skipFirst');
     const previewBox = document.getElementById('previewBox');
     const previewCanvas = document.getElementById('previewCanvas');
     const prevPageBtn = document.getElementById('prevPageBtn');
@@ -141,6 +140,7 @@
     const statusEl = document.getElementById('status');
 
     let alignMode = 'center';
+    let p1Mode = 'shift'; // 'shift' | 'keep' | 'exclude'
     let currentFile = null;
     let outputBlob = null;
     let currentPdfBytes = null;
@@ -167,20 +167,28 @@
       }
     }
 
+    function updateP1UI(mode) {
+      p1Mode = mode;
+      p1Buttons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.p1 === mode);
+      });
+    }
+
     try {
       const savedMode = localStorage.getItem('xp_mode') || 'center';
+      const savedP1 = localStorage.getItem('xp_p1_mode') || 'shift';
       updateModeUI(savedMode);
+      updateP1UI(savedP1);
       if (localStorage.getItem('xp_shift') !== null) shiftInput.value = localStorage.getItem('xp_shift');
       if (localStorage.getItem('xp_scale') !== null) scaleInput.value = localStorage.getItem('xp_scale');
-      if (localStorage.getItem('xp_skip1') !== null) skipFirstInput.checked = localStorage.getItem('xp_skip1') === 'true';
     } catch (e) {}
 
     function saveSettings() {
       try {
         localStorage.setItem('xp_mode', alignMode);
+        localStorage.setItem('xp_p1_mode', p1Mode);
         localStorage.setItem('xp_shift', shiftInput.value);
         localStorage.setItem('xp_scale', scaleInput.value);
-        localStorage.setItem('xp_skip1', skipFirstInput.checked);
       } catch (e) {}
     }
 
@@ -190,37 +198,6 @@
         await new Promise(r => setTimeout(r, 250));
       }
       return typeof PDFLib !== 'undefined';
-    }
-
-    function base64ToFile(rawInput) {
-      let raw = (rawInput || '').trim();
-      if (raw.includes('#pdf=')) raw = raw.split('#pdf=')[1];
-      if (raw.startsWith('data:')) raw = raw.split(',')[1] || '';
-      try { raw = decodeURIComponent(raw); } catch (e) {}
-      raw = raw.replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/=]/g, '');
-
-      const pdfStart = raw.indexOf('JVBERi0');
-      if (pdfStart > 0) {
-        raw = raw.slice(pdfStart);
-      }
-
-      raw = raw.replace(/=+$/, '');
-      if (raw.length % 4 === 1) {
-        raw = raw.slice(0, -1);
-      }
-      while (raw.length % 4 !== 0) {
-        raw += '=';
-      }
-
-      if (raw.length < 60 || !raw.startsWith('JVBERi0')) {
-        const preview = (rawInput || '').trim().slice(0, 45);
-        throw new Error('В буфере не PDF-код, а: «' + (preview || 'пусто') + '». Проверьте 3-й блок в Командах.');
-      }
-
-      const binary = atob(raw);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
     }
 
     async function renderPreview() {
@@ -257,7 +234,7 @@
       } catch (e) {}
     }
 
-    async function processPDF(isNewFile = false) {
+    async function processPDF(resetPage = false) {
       saveSettings();
       if (!currentFile) return;
 
@@ -274,39 +251,49 @@
         const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
         const outDoc = await PDFDocument.create();
 
-        const pageCount = srcDoc.getPageCount();
+        const srcCount = srcDoc.getPageCount();
         const shiftMm = parseFloat(shiftInput.value) || 0;
         const scale = (parseFloat(scaleInput.value) || 100) / 100;
-        const skipFirst = skipFirstInput.checked;
         const mmToPt = 2.83465;
 
-        for (let i = 0; i < pageCount; i++) {
-          if (i === 0 && skipFirst) {
-            const [copiedPage] = await outDoc.copyPages(srcDoc, [0]);
-            outDoc.addPage(copiedPage);
-          } else {
-            const srcPage = srcDoc.getPage(i);
-            const { width, height } = srcPage.getSize();
-            const embeddedPage = await outDoc.embedPage(srcPage);
-            const newPage = outDoc.addPage([width, height]);
+        const effectiveP1 = (srcCount === 1 && p1Mode === 'exclude') ? 'shift' : p1Mode;
+        let shiftedCount = 0;
 
-            const scaledW = width * scale;
-            const scaledH = height * scale;
-            const xOffset = alignMode === 'center'
-              ? ((width - scaledW) / 2) + (shiftMm * mmToPt)
-              : shiftMm * mmToPt;
-            const yOffset = (height - scaledH) / 2;
-
-            newPage.drawPage(embeddedPage, {
-              x: xOffset,
-              y: yOffset,
-              width: scaledW,
-              height: scaledH
-            });
+        for (let i = 0; i < srcCount; i++) {
+          if (i === 0) {
+            if (effectiveP1 === 'exclude') {
+              continue;
+            }
+            if (effectiveP1 === 'keep') {
+              const [copiedPage] = await outDoc.copyPages(srcDoc, [0]);
+              outDoc.addPage(copiedPage);
+              continue;
+            }
           }
+
+          const srcPage = srcDoc.getPage(i);
+          const { width, height } = srcPage.getSize();
+          const embeddedPage = await outDoc.embedPage(srcPage);
+          const newPage = outDoc.addPage([width, height]);
+
+          const scaledW = width * scale;
+          const scaledH = height * scale;
+          const xOffset = alignMode === 'center'
+            ? ((width - scaledW) / 2) + (shiftMm * mmToPt)
+            : shiftMm * mmToPt;
+          const yOffset = (height - scaledH) / 2;
+
+          newPage.drawPage(embeddedPage, {
+            x: xOffset,
+            y: yOffset,
+            width: scaledW,
+            height: scaledH
+          });
+          shiftedCount++;
         }
 
         const pdfBytes = await outDoc.save();
+        const outCount = outDoc.getPageCount();
         currentPdfBytes = pdfBytes;
         outputBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         outputFileName = 'fixed_' + currentFile.name;
@@ -317,70 +304,31 @@
         openLink.href = currentBlobUrl;
         openLink.style.display = 'block';
         shareBtn.classList.add('ready');
-        pasteBtn.classList.remove('highlight');
-        manualPaste.style.display = 'none';
 
-        if (isNewFile) {
-          previewPageNum = (pageCount > 1 && skipFirst) ? 2 : 1;
+        if (resetPage) {
+          previewPageNum = (outCount > 1 && effectiveP1 === 'keep') ? 2 : 1;
         }
         await renderPreview();
 
-        const shifted = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
         const modeText = alignMode === 'center' ? `центр, ${scaleInput.value}%` : `сдвиг ${shiftMm} мм, ${scaleInput.value}%`;
-        setStatus(`Готово (${modeText}): страниц ${pageCount}, изменено ${shifted}`, 'ok');
+        let extraNote = '';
+        if (srcCount === 1 && p1Mode === 'exclude') {
+          extraNote = ' (в файле 1 стр. — обработана со сдвигом)';
+        } else if (effectiveP1 === 'exclude') {
+          extraNote = ' (1-я стр. убрана)';
+        }
+        setStatus(`Готово (${modeText}): на печать ${outCount} стр., сдвинуто ${shiftedCount}${extraNote}`, 'ok');
       } catch (err) {
         setStatus('Ошибка PDF: ' + err.message, 'err');
       }
     }
 
-    pasteBtn.addEventListener('click', async () => {
-      try {
-        if (!navigator.clipboard || !navigator.clipboard.readText) {
-          throw new Error('blocked');
-        }
-        const text = await navigator.clipboard.readText();
-        if (!text) {
-          setStatus('Буфер обмена пуст — сначала отправьте этикетку через команду из Ozon.', 'err');
-          return;
-        }
-        currentFile = base64ToFile(text);
+    p1Buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        updateP1UI(btn.dataset.p1);
         processPDF(true);
-      } catch (err) {
-        if (err.message && err.message.startsWith('В буфере не PDF')) {
-          setStatus(err.message, 'err');
-        } else {
-          manualPaste.style.display = 'block';
-          manualPaste.focus();
-          setStatus('Нажмите на поле ниже и выберите системную кнопку «Вставить».', 'warn');
-        }
-      }
+      });
     });
-
-    manualPaste.addEventListener('input', () => {
-      setTimeout(() => {
-        const val = manualPaste.value;
-        manualPaste.value = '';
-        if (!val) return;
-        try {
-          currentFile = base64ToFile(val);
-          processPDF(true);
-        } catch (err) {
-          setStatus(err.message, 'err');
-        }
-      }, 50);
-    });
-
-    function checkUrlParams() {
-      const search = window.location.search;
-      if (search.includes('cb=1')) {
-        pasteBtn.classList.add('highlight');
-        setStatus('Файл скопирован командой — нажмите «Вставить PDF из буфера» ниже и подтвердите «Вставить».', 'warn');
-        history.replaceState(null, '', window.location.pathname);
-      } else if (search.includes('sc=1')) {
-        setStatus('Команда использует старую ссылку — переключите её на буфер обмена или выберите файл вручную.', 'err');
-        history.replaceState(null, '', window.location.pathname);
-      }
-    }
 
     prevPageBtn.addEventListener('click', () => {
       if (previewPageNum > 1) {
@@ -426,11 +374,11 @@
       }
     });
 
-    [shiftInput, scaleInput, skipFirstInput].forEach(el => el.addEventListener('change', () => processPDF(false)));
+    [shiftInput, scaleInput].forEach(el => el.addEventListener('change', () => processPDF(false)));
 
     shareBtn.addEventListener('click', async () => {
       if (!outputBlob) {
-        setStatus('Сначала загрузите PDF или вставьте его из буфера обмена.', 'err');
+        setStatus('Сначала выберите PDF с этикетками.', 'err');
         return;
       }
       const file = new File([outputBlob], outputFileName, { type: 'application/pdf' });
@@ -442,8 +390,6 @@
         window.open(openLink.href, '_blank');
       }
     });
-
-    window.addEventListener('DOMContentLoaded', checkUrlParams);
   </script>
 </body>
 </html>
