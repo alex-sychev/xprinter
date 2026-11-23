@@ -99,6 +99,7 @@
 
     let currentFile = null;
     let outputBlob = null;
+    let currentBlobUrl = null;
     let outputFileName = 'label_fixed.pdf';
 
     if (localStorage.getItem('xp_shift')) shiftInput.value = localStorage.getItem('xp_shift');
@@ -163,8 +164,10 @@
         outputBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         outputFileName = 'fixed_' + currentFile.name;
 
-        const blobUrl = URL.createObjectURL(outputBlob);
-        openLink.href = blobUrl;
+        if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+        currentBlobUrl = URL.createObjectURL(outputBlob);
+
+        openLink.href = currentBlobUrl;
         openLink.style.display = 'block';
         shareBtn.style.display = 'block';
 
@@ -179,44 +182,16 @@
       const hash = window.location.hash;
       if (!hash || !hash.startsWith('#pdf=')) return;
       try {
-        const raw = hash.slice(5).replace(/\s+/g, '');
+        let raw = decodeURIComponent(hash.slice(5)).replace(/\s+/g, '');
+        raw = raw.replace(/-/g, '+').replace(/_/g, '/');
+        while (raw.length % 4 !== 0) {
+          raw += '=';
+        }
         const binary = atob(raw);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) {
           bytes[i] = binary.charCodeAt(i);
         }
         currentFile = new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
-        history.replaceState(null, '', window.location.pathname);
+        history.replaceState(null, '', window.location.pathname + window.location.search);
         processPDF();
-      } catch (e) {
-        statusEl.textContent = 'Не удалось прочитать PDF из ссылки: ' + e.message;
-      }
-    }
-
-    pdfInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) {
-        currentFile = e.target.files[0];
-        processPDF();
-      }
-    });
-
-    [shiftInput, scaleInput, skipFirstInput].forEach(el => {
-      el.addEventListener('change', processPDF);
-    });
-
-    shareBtn.addEventListener('click', async () => {
-      if (!outputBlob) return;
-      const file = new File([outputBlob], outputFileName, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file] });
-        } catch (err) {}
-      } else {
-        window.open(openLink.href, '_blank');
-      }
-    });
-
-    window.addEventListener('DOMContentLoaded', loadFromHash);
-  </script>
-</body>
-</html>
