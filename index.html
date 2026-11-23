@@ -13,8 +13,10 @@
     .card { width: 100%; max-width: 440px; background: #1b1e22; border-radius: 16px; padding: 20px; }
     h1 { font-size: 20px; margin: 0 0 6px; }
     .sub { font-size: 13px; color: #98a2b3; margin: 0 0 16px; }
-    .file-btn { display: block; width: 100%; padding: 16px; background: #2563eb; color: #fff; text-align: center; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 16px; cursor: pointer; }
+    .file-btn { display: block; width: 100%; padding: 15px; background: #2563eb; color: #fff; text-align: center; border-radius: 12px; font-size: 16px; font-weight: 600; margin-bottom: 10px; cursor: pointer; border: none; }
     .file-btn:active { background: #1d4ed8; }
+    .paste-btn { display: block; width: 100%; padding: 14px; background: #1e293b; color: #93c5fd; border: 1px solid #3b82f6; text-align: center; border-radius: 12px; font-size: 15px; font-weight: 600; margin-bottom: 16px; cursor: pointer; }
+    .paste-btn.highlight { background: #1d4ed8; color: #fff; border-color: #60a5fa; }
     input[type="file"] { display: none; }
 
     .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #121417; padding: 4px; border-radius: 10px; border: 1px solid #2e333a; margin-bottom: 12px; }
@@ -54,6 +56,7 @@
 
     <label class="file-btn" for="pdfInput">Выбрать PDF с этикетками</label>
     <input type="file" id="pdfInput" accept="application/pdf,.pdf">
+    <button type="button" class="paste-btn" id="pasteBtn">Вставить PDF из буфера</button>
 
     <div class="tabs">
       <button type="button" class="tab-btn active" id="modeCenterBtn">По центру</button>
@@ -109,6 +112,7 @@
     }
 
     const pdfInput = document.getElementById('pdfInput');
+    const pasteBtn = document.getElementById('pasteBtn');
     const modeCenterBtn = document.getElementById('modeCenterBtn');
     const modeShiftBtn = document.getElementById('modeShiftBtn');
     const shiftLabel = document.getElementById('shiftLabel');
@@ -171,6 +175,20 @@
       return typeof PDFLib !== 'undefined';
     }
 
+    function base64ToFile(rawInput) {
+      let raw = rawInput.trim();
+      if (raw.includes('#pdf=')) raw = raw.split('#pdf=')[1];
+      if (raw.startsWith('data:')) raw = raw.split(',')[1] || '';
+      try { raw = decodeURIComponent(raw); } catch (e) {}
+      raw = raw.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+      while (raw.length % 4 !== 0) raw += '=';
+      const binary = atob(raw);
+      if (binary.length < 50) throw new Error('В буфере нет корректного PDF');
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
+    }
+
     async function renderPreview() {
       if (!currentPdfBytes || typeof pdfjsLib === 'undefined') return;
       try {
@@ -219,160 +237,4 @@
       try {
         const arrayBuffer = await currentFile.arrayBuffer();
         const { PDFDocument } = PDFLib;
-        const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-        const outDoc = await PDFDocument.create();
-
-        const pageCount = srcDoc.getPageCount();
-        const shiftMm = parseFloat(shiftInput.value) || 0;
-        const scale = (parseFloat(scaleInput.value) || 100) / 100;
-        const skipFirst = skipFirstInput.checked;
-        const mmToPt = 2.83465;
-
-        for (let i = 0; i < pageCount; i++) {
-          if (i === 0 && skipFirst) {
-            const [copiedPage] = await outDoc.copyPages(srcDoc, [0]);
-            outDoc.addPage(copiedPage);
-          } else {
-            const srcPage = srcDoc.getPage(i);
-            const { width, height } = srcPage.getSize();
-            const embeddedPage = await outDoc.embedPage(srcPage);
-            const newPage = outDoc.addPage([width, height]);
-
-            const scaledW = width * scale;
-            const scaledH = height * scale;
-            const xOffset = alignMode === 'center'
-              ? ((width - scaledW) / 2) + (shiftMm * mmToPt)
-              : shiftMm * mmToPt;
-            const yOffset = (height - scaledH) / 2;
-
-            newPage.drawPage(embeddedPage, {
-              x: xOffset,
-              y: yOffset,
-              width: scaledW,
-              height: scaledH
-            });
-          }
-        }
-
-        const pdfBytes = await outDoc.save();
-        currentPdfBytes = pdfBytes;
-        outputBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-        outputFileName = 'fixed_' + currentFile.name;
-
-        if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-        currentBlobUrl = URL.createObjectURL(outputBlob);
-
-        openLink.href = currentBlobUrl;
-        openLink.style.display = 'block';
-        shareBtn.classList.add('ready');
-
-        if (isNewFile) {
-          previewPageNum = (pageCount > 1 && skipFirst) ? 2 : 1;
-        }
-        await renderPreview();
-
-        const shifted = skipFirst ? Math.max(0, pageCount - 1) : pageCount;
-        const modeText = alignMode === 'center' ? `центр, ${scaleInput.value}%` : `сдвиг ${shiftMm} мм, ${scaleInput.value}%`;
-        statusEl.textContent = `Готово (${modeText}): страниц ${pageCount}, изменено ${shifted}`;
-      } catch (err) {
-        statusEl.textContent = 'Ошибка PDF: ' + err.message;
-      }
-    }
-
-    function loadFromHash() {
-      const hash = window.location.hash;
-      const fromShortcut = window.location.search.includes('sc=1');
-
-      if (!hash || !hash.startsWith('#pdf=')) {
-        if (fromShortcut) {
-          statusEl.textContent = 'iOS обрезала слишком большой файл при передаче по ссылке — выберите его синей кнопкой выше.';
-          history.replaceState(null, '', window.location.pathname);
-        }
-        return;
-      }
-
-      try {
-        let raw = decodeURIComponent(hash.slice(5)).replace(/\s+/g, '');
-        raw = raw.replace(/-/g, '+').replace(/_/g, '/');
-        while (raw.length % 4 !== 0) {
-          raw += '=';
-        }
-        const binary = atob(raw);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        currentFile = new File([bytes], 'ozon_label.pdf', { type: 'application/pdf' });
-        history.replaceState(null, '', window.location.pathname);
-        processPDF(true);
-      } catch (e) {
-        statusEl.textContent = 'Ошибка чтения PDF из ссылки: ' + e.message;
-      }
-    }
-
-    prevPageBtn.addEventListener('click', () => {
-      if (previewPageNum > 1) {
-        previewPageNum--;
-        renderPreview();
-      }
-    });
-
-    nextPageBtn.addEventListener('click', () => {
-      if (previewPageNum < totalPagesCount) {
-        previewPageNum++;
-        renderPreview();
-      }
-    });
-
-    modeCenterBtn.addEventListener('click', () => {
-      updateModeUI('center');
-      shiftInput.value = '0';
-      if (parseFloat(scaleInput.value) > 95) scaleInput.value = '90';
-      processPDF(false);
-    });
-
-    modeShiftBtn.addEventListener('click', () => {
-      updateModeUI('shift');
-      if (parseFloat(shiftInput.value) === 0) shiftInput.value = '3';
-      processPDF(false);
-    });
-
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        updateModeUI(btn.dataset.mode);
-        shiftInput.value = btn.dataset.shift;
-        scaleInput.value = btn.dataset.scale;
-        processPDF(false);
-      });
-    });
-
-    pdfInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) {
-        currentFile = e.target.files[0];
-        e.target.value = '';
-        processPDF(true);
-      }
-    });
-
-    [shiftInput, scaleInput, skipFirstInput].forEach(el => el.addEventListener('change', () => processPDF(false)));
-
-    shareBtn.addEventListener('click', async () => {
-      if (!outputBlob) {
-        statusEl.textContent = 'Сначала выберите PDF-файл синей кнопкой выше.';
-        return;
-      }
-      const file = new File([outputBlob], outputFileName, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file] });
-        } catch (err) {}
-      } else {
-        window.open(openLink.href, '_blank');
-      }
-    });
-
-    window.addEventListener('DOMContentLoaded', loadFromHash);
-    window.addEventListener('hashchange', loadFromHash);
-  </script>
-</body>
-</html>
+        const srcDoc = await PDFDocument.load
